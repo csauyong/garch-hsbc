@@ -1,0 +1,97 @@
+---
+title: "Heteroskedasticity"
+output: github_document
+---
+
+# Introduction
+Heteroskedasticity means that the variance of the time series is non-constant. It is a property commonly exhibited by stock data. For heteroskedastic series, GARCH model should be used to fit the data instead of ARIMA model to capture the non-constant variance. In this notebook, we will compare the fit of two different model on HSBC stock price on HKEX.
+
+# Preprocessing
+Import required libraries.
+```{r, initvar}
+#install.packages("tseries")
+#install.packages("forecast")
+library(tseries)
+library(forecast)
+```
+Import and clean the stock data. 
+```{r, part 2a}
+hsbc = get.hist.quote(instrument="0005.hk", start="2016-01-01", end="2021-12-31", quote=c("AdjClose"))
+hsbc[is.na(hsbc)==T] = mean(hsbc, na.rm=T)
+y = as.numeric(log(hsbc))
+par(mfrow=c(1,2))
+ts.plot(y)
+acf(y)
+```
+# ARIMA fitting
+The ACF plot shows that there is a trend within the time series. To establish stationarity for further analysis, we can perform differencing on the series.
+```{r}
+diffy = as.numeric(diff(log(hsbc)))
+par(mfrow=c(1,2))
+ts.plot(diffy)
+acf(diffy)
+```
+
+From the ACF plot, we can see that for k > 0, all ACF(k) is within the confidence interval. This suggests ARIMA(0, 0, 0) should best fit the differenced data. The hypothesis can be confirmed using auto ARIMA fitting, showing that ARIMA(0, 1, 0) best fits the original data.
+```{r, part 2b}
+model.arima = auto.arima(y, ic="aicc")
+model.arima
+```
+However, residual-squared of ARIMA(0, 0, 0) is not white noise. This suggests that the residual is also not white noise. As the residual still contains information, some other model should be used to capture those information.
+
+```{r, part 2c}
+res.arima = model.arima$res
+par(mfrow=c(1,2))
+acf(res.arima)
+acf(res.arima^2)
+```
+# GARCH fitting
+Before fitting a GARCH model, we should test for GARCH effect using Lagrange Multiplier test. Since p-value = 0 < 0.05, we can reject null hypothesis and conclude that that GARCH effect is significant.
+```{r}
+n = length(res.arima)
+res.sq.arima = res.arima^2
+df.garch = data.frame(
+rsq = res.sq.arima,
+rsq1 = c(rep(0, 1), res.sq.arima[1:(n-1)]),
+rsq2 = c(rep(0, 2), res.sq.arima[1:(n-2)]),
+rsq3 = c(rep(0, 3), res.sq.arima[1:(n-3)]),
+rsq4 = c(rep(0, 4), res.sq.arima[1:(n-4)])
+)
+model.garch.effect = lm(formula = rsq ~ ., data = df.garch)
+summary(model.garch.effect)
+```
+
+We can find the best GARCH(p, q) model by trying out combinations of p and q and selecting the one which minimises AIC.
+```{r}
+df.order <- data.frame(p = c(0, 1, 0, 1, 2, 1, 2), q = c(1, 0, 2, 1, 0, 2, 1))
+vec.aic.garch = apply(df.order, 1,
+function(order) {
+  p <- order[1]; q <- order[2]
+  AIC(garch(res.arima, order = c(p, q)))
+} )
+
+```
+
+From the following plot, we can see that the 4th combination (1, 1) minimises AIC.
+```{r}
+par(mfrow = c(1, 1))
+plot(1:nrow(df.order), vec.aic.garch)
+```
+
+Therefore, we fit GARCH(1, 1) to the residual of the ARIMA fitting.
+```{r}
+model.garch = garch(res.arima, order = c(1, 1))
+summary(model.garch)
+```
+The time series plot and ACF plots show that the residual of GARCH(1, 1) is indeed white noise. Moreover, the residual is normally distributed because normal quantile-quantile plot shows approximately a straight line.
+```{r}
+res.garch = residuals(model.garch)
+res.garch = na.omit(res.garch)
+par(mfrow = c(2, 2))
+ts.plot(res.garch)
+acf(res.garch)
+acf(res.garch^2)
+qqnorm(res.garch)
+
+```
+
