@@ -54,8 +54,10 @@ ts.plot(y)
 acf(y)
 ```
 
-![](HSBC_files/figure-gfm/part%202a-1.png)<!-- --> # ARIMA fitting The
-ACF plot shows that there is a trend within the time series. To
+![](HSBC_files/figure-gfm/part%202a-1.png)<!-- --> 
+
+# ARIMA fitting 
+The ACF plot shows that there is a trend within the time series. To
 establish stationarity for further analysis, we can perform differencing
 on the series.
 
@@ -96,7 +98,9 @@ acf(res.arima)
 acf(res.arima^2)
 ```
 
-![](HSBC_files/figure-gfm/part%202c-1.png)<!-- --> # GARCH fitting
+![](HSBC_files/figure-gfm/part%202c-1.png)<!-- --> 
+
+# GARCH fitting
 Before fitting a GARCH model, we should test for GARCH effect using
 Lagrange Multiplier test. Since p-value = 0 \< 0.05, we can reject null
 hypothesis and conclude that that GARCH effect is significant.
